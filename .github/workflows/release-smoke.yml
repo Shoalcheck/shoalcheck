@@ -126,18 +126,18 @@ jobs:
           curl -fs http://127.0.0.1:47812/api/license | tee license.json
           grep -q '"unlicensed":true' license.json
 
+      - name: A kind cluster config
+        if: matrix.cluster
+        run: |
+          printf '%s\n' 'kind: Cluster' 'apiVersion: kind.x-k8s.io/v1alpha4' 'nodes:' \
+            '  - role: control-plane' '  - role: worker' '  - role: worker' > "$RUNNER_TEMP/kind.yaml"
+
       - name: A kind cluster to read
         if: matrix.cluster
         uses: helm/kind-action@v1
         with:
           cluster_name: smoke
-          config: |
-            kind: Cluster
-            apiVersion: kind.x-k8s.io/v1alpha4
-            nodes:
-              - role: control-plane
-              - role: worker
-              - role: worker
+          config: ${{ runner.temp }}/kind.yaml
 
       - name: Preflight and the free audit against it (Linux)
         if: matrix.cluster
