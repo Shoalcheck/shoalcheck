@@ -1,0 +1,158 @@
+name: release-smoke
+
+# EVERY PUBLISHED FILE, ON EVERY PLATFORM IT CLAIMS. The landing page offers downloads for six platform pairs;
+# this runs the published archives — not a fresh build — on each of them, and on Linux against a real kind
+# cluster. A platform with no green run here is a platform nobody has seen work.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to verify (empty: the newest published release, candidates included)"
+        required: false
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,    goos: linux,   goarch: amd64, ext: tar.gz, cluster: true }
+          - { os: ubuntu-24.04-arm, goos: linux,   goarch: arm64, ext: tar.gz, cluster: true }
+          - { os: macos-14,         goos: darwin,  goarch: arm64, ext: tar.gz, dmg: true }
+          - { os: macos-15-intel,   goos: darwin,  goarch: amd64, ext: tar.gz, dmg: true }
+          - { os: windows-latest,   goos: windows, goarch: amd64, ext: zip }
+          - { os: windows-11-arm,   goos: windows, goarch: arm64, ext: zip }
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.goos }}/${{ matrix.goarch }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG_INPUT: ${{ inputs.tag || github.event.release.tag_name }}
+      SHOALCHECK_HOME: ${{ runner.temp }}/home
+      BIN: ${{ matrix.goos == 'windows' && '.exe' || '' }}
+    steps:
+      - name: Which release
+        run: |
+          tag="$TAG_INPUT"
+          [ -n "$tag" ] || tag=$(gh release list -R "$GITHUB_REPOSITORY" --limit 1 --exclude-drafts --json tagName --jq '.[0].tagName')
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "VER=${tag#v}" >> "$GITHUB_ENV"
+          echo "verifying $tag on ${{ matrix.goos }}/${{ matrix.goarch }} ($RUNNER_OS $RUNNER_ARCH)"
+
+      - name: Download the published files
+        run: |
+          mkdir dl && cd dl
+          app="shoalcheck-app_${VER}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.ext }}"
+          [ "${{ matrix.goos }}" = darwin ] && app="Shoalcheck_${VER}_macos_universal.dmg"
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" \
+            -p checksums.txt -p checksums.txt.sigstore.json -p cosign.pub \
+            -p "shoalcheck_${VER}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.ext }}" \
+            -p "shoalcheck-mcp_${VER}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.ext }}" \
+            -p "$app"
+          ls -la
+          echo "APP_FILE=$app" >> "$GITHUB_ENV"
+
+      - name: The checksums match the files
+        working-directory: dl
+        run: |
+          if command -v sha256sum >/dev/null; then sha256sum --ignore-missing -c checksums.txt
+          else shasum -a 256 --ignore-missing -c checksums.txt; fi
+
+      - name: Install cosign
+        if: matrix.goos != 'windows'
+        uses: sigstore/cosign-installer@v3
+
+      - name: The checksums carry the published signature
+        if: matrix.goos != 'windows'
+        working-directory: dl
+        run: cosign verify-blob --key cosign.pub --bundle checksums.txt.sigstore.json checksums.txt
+
+      - name: Unpack
+        working-directory: dl
+        run: |
+          for f in shoalcheck_*.${{ matrix.ext }} shoalcheck-mcp_*.${{ matrix.ext }}; do
+            if [ "${{ matrix.ext }}" = zip ]; then pwsh -NoProfile -Command "Expand-Archive -Force '$f' ."; else tar xzf "$f"; fi
+          done
+          if [ "${{ matrix.goos }}" != darwin ]; then
+            if [ "${{ matrix.ext }}" = zip ]; then pwsh -NoProfile -Command "Expand-Archive -Force '$APP_FILE' ."; else tar xzf "$APP_FILE"; fi
+          fi
+          ls -la
+
+      - name: The command line answers without a cluster
+        working-directory: dl
+        run: |
+          set -x
+          ./shoalcheck$BIN version | tee version.txt
+          grep -q "shoalcheck $VER" version.txt
+          ./shoalcheck$BIN --help > help.txt 2>&1; grep -q 'shoalcheck licence' help.txt
+          ./shoalcheck$BIN licence plans > plans.txt; grep -q 'Pro' plans.txt
+          ./shoalcheck$BIN licence > licence.txt; grep -q 'plan      free' licence.txt
+          ./shoalcheck$BIN audit --show-permissions > perms.txt; grep -q 'get,list' perms.txt
+          set +e; ./shoalcheck$BIN fleet --context a --context b --output x.html 2> fleet.err; code=$?; set -e
+          cat fleet.err; [ "$code" = 4 ] && grep -q Team fleet.err
+          set +e; ./shoalcheck-mcp$BIN --print-identity 2> mcp.err; code=$?; set -e
+          cat mcp.err; [ "$code" = 4 ]
+
+      - name: The window's server starts and reads the licence (Windows, Linux)
+        if: matrix.goos != 'darwin'
+        working-directory: dl
+        run: |
+          ./shoalcheck-app$BIN --no-open --addr 127.0.0.1:47812 > app.out 2>&1 &
+          for i in $(seq 1 60); do curl -fs http://127.0.0.1:47812/ -o index.html && break; sleep 0.5; done
+          cat app.out
+          grep -q '<title>Shoalcheck</title>' index.html
+          curl -fs http://127.0.0.1:47812/api/license | tee license.json
+          grep -q '"unlicensed":true' license.json
+
+      - name: The macOS app from the disk image starts and reads the licence
+        if: matrix.dmg
+        working-directory: dl
+        run: |
+          hdiutil attach "$APP_FILE" -nobrowse -readonly -mountpoint /tmp/sc-dmg
+          ls /tmp/sc-dmg
+          app=/tmp/sc-dmg/Shoalcheck.app/Contents/MacOS/Shoalcheck
+          lipo -info "$app"
+          "$app" --no-open --addr 127.0.0.1:47812 > app.out 2>&1 &
+          for i in $(seq 1 60); do curl -fs http://127.0.0.1:47812/ -o index.html && break; sleep 0.5; done
+          cat app.out
+          grep -q '<title>Shoalcheck</title>' index.html
+          curl -fs http://127.0.0.1:47812/api/license | tee license.json
+          grep -q '"unlicensed":true' license.json
+
+      - name: A kind cluster to read
+        if: matrix.cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: smoke
+          config: |
+            kind: Cluster
+            apiVersion: kind.x-k8s.io/v1alpha4
+            nodes:
+              - role: control-plane
+              - role: worker
+              - role: worker
+
+      - name: Preflight and the free audit against it (Linux)
+        if: matrix.cluster
+        working-directory: dl
+        run: |
+          kubectl create namespace payments
+          kubectl -n payments create deployment ledger-api --image=registry.k8s.io/pause:3.9 --replicas=2
+          kubectl -n payments patch deployment ledger-api --type merge -p '{"spec":{"template":{"spec":{"nodeSelector":{"kubernetes.io/hostname":"smoke-worker"}}}}}'
+          kubectl -n payments create pdb ledger-api --selector=app=ledger-api --max-unavailable=0
+          kubectl -n payments rollout status deployment/ledger-api --timeout=180s
+          # The budget's status is written by a controller a moment later; the drain verdict reads it.
+          kubectl -n payments wait pdb/ledger-api --for=jsonpath='{.status.expectedPods}'=2 --timeout=120s
+          set +e; ./shoalcheck preflight drain smoke-worker --context kind-smoke > drain.txt 2>&1; code=$?; set -e
+          cat drain.txt; [ "$code" = 2 ] && grep -q 'cannot be evacuated' drain.txt
+          ./shoalcheck audit --context kind-smoke > free.txt 2>/dev/null
+          cat free.txt; grep -q 'the free reading' free.txt
+          set +e; ./shoalcheck audit --context kind-smoke --output r.html > /dev/null 2> out.err; code=$?; set -e
+          cat out.err; [ "$code" = 4 ] && [ ! -e r.html ]
