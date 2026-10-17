@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Shoalcheck — what it does to your cluster</title>
+<meta name="description" content="The permission Shoalcheck asks for, written out: 47 resource types, get and list only, never watch. What it never requests, what it counts, and where the data goes. Every claim on this page names the file or the gate that holds it." />
+<meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#08080a" />
+<link rel="icon" href="brand/shoalcheck-icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css" />
+
+<style>
+/* This page is prose and tables, not the landing's stage: no WebGL intro, no scroll
+   choreography, no vendored animation libraries. It borrows the site's tokens and
+   type from /styles.css and adds only what a reference page needs. */
+.ro-head { padding: var(--s-8) 0 var(--s-6); }
+.ro-title { font-size: clamp(1.9rem, 4vw, 3rem); line-height: 1.08; letter-spacing: -0.02em; margin: var(--s-4) 0 0; }
+.ro-deck { margin-top: var(--s-5); font-size: var(--t-lg); line-height: 1.55; color: var(--fg-muted); max-width: 62ch; }
+.ro-deck strong { color: var(--fg-soft); font-weight: 600; }
+
+.ro-sec { padding: var(--s-7) 0; border-top: 1px solid var(--border); }
+.ro-sec > .wrap > h2 { font-size: var(--t-xl); letter-spacing: -0.012em; margin: var(--s-3) 0 0; }
+.ro-sec p { max-width: 68ch; line-height: 1.6; color: var(--fg-muted); }
+.ro-sec p strong { color: var(--fg-soft); font-weight: 600; }
+
+/* A claim and the thing that holds it, on one line. The basis is not a footnote:
+   it is the reason the sentence beside it is worth reading. */
+.ro-claim { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 22rem); gap: var(--s-5);
+            padding: var(--s-5) 0; border-bottom: 1px solid var(--border-subtle); align-items: start; }
+.ro-claim:last-child { border-bottom: none; }
+.ro-claim .c { margin: 0; color: var(--fg-soft); line-height: 1.55; }
+.ro-claim .b { margin: 0; font-family: var(--font-mono); font-size: var(--t-xs); line-height: 1.6;
+               color: var(--fg-faint); }
+.ro-claim .b em { font-style: normal; color: var(--fg-muted); }
+@media (max-width: 780px) { .ro-claim { grid-template-columns: 1fr; gap: var(--s-2); } }
+
+.ro-kinds { column-width: 12rem; column-gap: var(--s-6); margin: var(--s-5) 0 0; padding: 0; list-style: none;
+            font-family: var(--font-mono); font-size: var(--t-xs); color: var(--fg-muted); }
+.ro-kinds li { padding: 2px 0; break-inside: avoid; }
+
+.ro-never { margin: var(--s-5) 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s-3); }
+.ro-never li { display: grid; grid-template-columns: 14rem minmax(0, 1fr); gap: var(--s-4);
+               font-size: var(--t-sm); line-height: 1.55; color: var(--fg-muted); }
+.ro-never .k { font-family: var(--font-mono); font-size: var(--t-xs); color: var(--fg-soft); }
+@media (max-width: 700px) { .ro-never li { grid-template-columns: 1fr; gap: 2px; } }
+
+.ro-code { margin: var(--s-5) 0 0; padding: var(--s-5); border: 1px solid var(--border);
+           border-radius: 6px; background: var(--bg-sunk, rgba(255,255,255,.02));
+           font-family: var(--font-mono); font-size: var(--t-xs); line-height: 1.7;
+           color: var(--fg-soft); overflow-x: auto; white-space: pre; }
+.ro-code .cm { color: var(--fg-faint); }
+
+.ro-note { margin-top: var(--s-6); padding: var(--s-5); border: 1px solid var(--border);
+           border-left: 3px solid var(--primary); border-radius: 6px; }
+.ro-note p { margin: 0; max-width: 74ch; }
+.ro-note p + p { margin-top: var(--s-3); }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="./" aria-label="Shoalcheck home">
+      <svg class="brand-mark" viewBox="0 0 100 100" role="img" aria-hidden="true">
+        <rect width="100" height="100" rx="25" fill="#0b1417" /><g transform="scale(4.1667)" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5c1.3-1.2 2.7-1.2 4 0s2.7 1.2 4 0 2.7-1.2 4 0 2.7 1.2 4 0" stroke="#7fe7d9"/><path d="M3.5 18.5c3.4 0 5-5 8.5-5s5.1 5 8.5 5" stroke="#2dd4bf"/></g>
+      </svg>
+      <span class="brand-name">Shoalcheck</span>
+      <span class="brand-tag">read-only</span>
+    </a>
+    <div class="topbar-spacer"></div>
+    <nav class="topbar-links" aria-label="Primary">
+      <a class="topbar-link" href="sample-report.html">Sample report</a>
+      <a class="topbar-link" href="read-only.html" aria-current="page">Your cluster</a>
+      <a class="topbar-link" href="index.html#download">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="ro-head">
+    <div class="wrap">
+      <div class="eyebrow">What it does to your cluster</div>
+      <h1 class="ro-title">It asks 47 questions, all of them <em>get</em> and <em>list</em>.</h1>
+      <p class="ro-deck">
+        Nothing is installed. Nothing runs after the command exits. The audit reads objects through the
+        API server you already have credentials for, counts every request it makes, and prints that count
+        in the reading it produces — so <strong>the read-only claim is a measurement, not a promise</strong>.
+      </p>
+      <p class="ro-deck">
+        Every claim below names the file or the gate that holds it, because a page about trust that asks to
+        be trusted is the wrong shape. The repository is source-available: you can read all of it.
+      </p>
+    </div>
+  </section>
+
+  <section class="ro-sec">
+    <div class="wrap">
+      <div class="eyebrow">The permission</div>
+      <h2>One ClusterRole, and it is in the repository</h2>
+      <p>
+        <code>deploy/rbac.yaml</code> is the exact access the collector needs — <strong>get and list, on 47
+        resource types, and no <code>watch</code></strong>. An audit is one snapshot; a watch is a
+        subscription, and this tool has no time axis to spend one on. Apply that role and nothing else, and
+        the audit either completes or tells you which kind it was refused. It never turns a refusal into
+        a result that reads as nothing found.
+      </p>
+
+      <div class="ro-claim">
+        <p class="c">The role and the collector cannot drift apart. Adding a collection step without adding
+          it to the published role — or the reverse — fails the build.</p>
+        <p class="b"><em>gate:</em> TestRBACContractMatchesCollector<br><em>source:</em> internal/collect/permissions.go · deploy/rbac.yaml</p>
+      </div>
+      <div class="ro-claim">
+        <p class="c">A kind you decline is reported as declined, in the reading, by name — not folded into
+          the findings and not counted as a pass.</p>
+        <p class="b"><em>source:</em> the reading's own methodology section<br><em>and:</em> every control it could not check reads <span style="white-space:nowrap">not assessed</span></p>
+      </div>
+
+      <ul class="ro-kinds">
+        <li>nodes</li><li>namespaces</li><li>pods</li><li>services</li><li>endpointslices</li>
+        <li>serviceaccounts</li><li>resourcequotas</li><li>limitranges</li><li>persistentvolumes</li>
+        <li>persistentvolumeclaims</li><li>deployments</li><li>statefulsets</li><li>daemonsets</li>
+        <li>poddisruptionbudgets</li><li>clusterrolebindings</li><li>rolebindings</li><li>clusterroles</li>
+        <li>roles</li><li>networkpolicies <span style="color:var(--fg-faint)">· k8s</span></li>
+        <li>networkpolicies <span style="color:var(--fg-faint)">· calico</span></li>
+        <li>ingresses</li><li>horizontalpodautoscalers</li>
+        <li>cronjobs</li><li>jobs</li><li>customresourcedefinitions</li><li>storageclasses</li>
+        <li>ingressclasses</li><li>priorityclasses</li><li>certificates</li><li>peerauthentications</li>
+        <li>authorizationpolicies</li><li>destinationrules</li><li>servers</li><li>applications</li>
+        <li>kustomizations</li><li>helmreleases</li><li>ciliumnetworkpolicies</li>
+        <li>ciliumclusterwidenetworkpolicies</li><li>globalnetworkpolicies</li><li>scaledobjects</li>
+        <li>kafkas</li><li>gateways</li><li>httproutes</li><li>servicemonitors</li><li>podmonitors</li>
+        <li>alertmanagerconfigs</li><li>prometheuses</li>
+      </ul>
+      <p style="margin-top:var(--s-4);font-family:var(--font-mono);font-size:var(--t-xxs);color:var(--fg-faint)">
+        47 group/resource pairs, 46 distinct names — <code>networkpolicies</code> is asked twice, once of
+        Kubernetes and once of Calico, because they are different resources with the same word for a name.
+        The operator CRDs are read for spec and status. A cluster without them is not asked about them.
+      </p>
+    </div>
+  </section>
+
+  <section class="ro-sec">
+    <div class="wrap">
+      <div class="eyebrow">What it never requests</div>
+      <h2>The role has no rule for these, so there is nothing to switch off</h2>
+      <p>
+        This is not a setting. The access simply is not granted, and a request the role does not cover is
+        refused by your API server rather than by our good intentions.
+      </p>
+      <ul class="ro-never">
+        <li><span class="k">secrets</span><span>Never requested. A Secret's value is the credential itself, and a tool that reads one has to be trusted with everything it protects.</span></li>
+        <li><span class="k">configmaps</span><span>Never requested. Configuration is where people put connection strings when they run out of Secrets.</span></li>
+        <li><span class="k">pods/exec · pods/attach</span><span>No rule. Nothing runs inside your containers.</span></li>
+        <li><span class="k">pods/log</span><span>No rule. Logs carry request bodies, tokens and customer data.</span></li>
+        <li><span class="k">pods/portforward</span><span>No rule for the audit. Reaching a Prometheus through a port-forward is a separate, explicit action you take.</span></li>
+        <li><span class="k">pod env values</span><span>Container environment is read for what is DECLARED — that a variable exists, and where it comes from — never for a value.</span></li>
+        <li><span class="k">create · update · patch<br>delete · deletecollection</span><span>No rule for any of them, on any kind. There is no flag that adds one.</span></li>
+      </ul>
+
+      <div class="ro-claim">
+        <p class="c">Where a finding depends on something inside a Secret or a ConfigMap, the reading says
+          it could not be established rather than guessing from the name of the object.</p>
+        <p class="b"><em>source:</em> internal/collect/rbac.go — <em>“a name can never be trusted about”</em></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="ro-sec">
+    <div class="wrap">
+      <div class="eyebrow">The measurement</div>
+      <h2>Object writes are counted, and the count is in the document</h2>
+      <p>
+        Every request the process makes passes through a recorder installed on the transport. It classifies
+        each one, and a <code>POST</code>, <code>PUT</code>, <code>PATCH</code> or <code>DELETE</code>
+        against an object is a <strong>write</strong>. Each reading prints its own totals — how many reads,
+        how many writes, how many streams — so a run that wrote something would say so in the artifact it
+        produced.
+      </p>
+
+      <div class="ro-code">reads   66      <span class="cm">every get and list this run issued</span>
+writes   0      <span class="cm">create, update, patch or delete against an object</span>
+streams  0      <span class="cm">watches and long-lived connections</span></div>
+
+      <div class="ro-claim">
+        <p class="c">No client can slip past the recorder. Three layers check it: which packages may build
+          a client at all, which files may construct a transport, and — in the tests — that the recorder's
+          count equals a real server's own count, exactly.</p>
+        <p class="b"><em>gate:</em> transport-gate, in <code>make ci</code><br><em>runtime:</em> internal/collect and internal/prom assert 22 = 22 against an httptest server</p>
+      </div>
+      <div class="ro-claim">
+        <p class="c">A write to somewhere that is not your API server is counted separately, so “zero
+          object writes” keeps meaning Kubernetes objects and cannot be diluted by anything else.</p>
+        <p class="b"><em>source:</em> internal/trace/recorder.go — <em>OffTargetWrite</em></p>
+      </div>
+      <div class="ro-claim">
+        <p class="c">A reading whose trace was not recorded says <span style="white-space:nowrap">“no trace
+          was recorded”</span>. It does not print a zero, because an uncounted zero and a counted one are
+          different facts.</p>
+        <p class="b"><em>type:</em> TraceKnown, beside the count itself</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="ro-sec">
+    <div class="wrap">
+      <div class="eyebrow">Where the data goes</div>
+      <h2>To a file on the machine that ran the command</h2>
+      <p>
+        The audit talks to your API server, and to a Prometheus if you point it at one — that is the whole
+        list. The reading is written to disk beside its snapshot. Nothing is uploaded, and there is no
+        account to create before the tool works.
+      </p>
+
+      <div class="ro-claim">
+        <p class="c">The reading is one self-contained HTML file. A copy you forward fetches nothing when
+          it is opened — not a stylesheet, not a script, not a font.</p>
+        <p class="b"><em>gate:</em> the browser corpus opens every rendered document offline<br><em>including:</em> both typefaces, embedded</p>
+      </div>
+      <div class="ro-claim">
+        <p class="c">One outbound address is compiled into the binary, for signed reference-data bundles.
+          No audit path calls it: prices and schedules come from tables that ship with the build, and each
+          reading names which table it used and when that table was generated.</p>
+        <p class="b"><em>source:</em> internal/refdata/fetch.go — a single constant, no interpolation<br><em>gate:</em> TestFetch_ACallerCannotSupplyAURL</p>
+      </div>
+      <div class="ro-claim">
+        <p class="c">Cloud billing reconciliation, where it is used at all, is a second trust boundary you
+          cross deliberately with your own credential. It is off unless you turn it on.</p>
+        <p class="b"><em>package:</em> internal/billing, opt-in</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="ro-sec">
+    <div class="wrap">
+      <div class="eyebrow">Checking it yourself</div>
+      <h2>Three ways, none of which involve believing this page</h2>
+      <p>
+        Read <code>deploy/rbac.yaml</code> — it is the whole permission surface, in the repository, next to
+        the code that uses it. Apply it as its own ServiceAccount and run the audit under that; anything
+        beyond the role fails at your API server. Then read the reading's own request ledger, which lists
+        every call by verb and target.
+      </p>
+      <div class="ro-note">
+        <p><strong>The strongest check is your own audit log.</strong> Run Shoalcheck against a cluster whose
+          API server audit log you can read, and compare it against the request count the reading prints.
+          The two numbers are the same claim from two directions, and only one of them is ours.</p>
+        <p>If they disagree, that is a defect worth telling us about, and it is the kind we would rather
+          hear from you than not hear at all.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div>
+          <a class="brand" href="./" aria-label="Shoalcheck home" style="margin-bottom:var(--s-4)">
+            <svg class="brand-mark" viewBox="0 0 100 100" role="img" aria-hidden="true"><rect width="100" height="100" rx="25" fill="#0b1417" /><g transform="scale(4.1667)" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5c1.3-1.2 2.7-1.2 4 0s2.7 1.2 4 0 2.7-1.2 4 0 2.7 1.2 4 0" stroke="#7fe7d9"/><path d="M3.5 18.5c3.4 0 5-5 8.5-5s5.1 5 8.5 5" stroke="#2dd4bf"/></g></svg>
+            <span class="brand-name">Shoalcheck</span>
+          </a>
+          <p class="footer-disclaimer"><span class="label">Not a certified audit</span>Shoalcheck produces observations and potential gaps mapped to control frameworks for convenience — indicators for further review, not pass/fail attestations, and not issued by a QSA, CPA, or accredited auditor.</p>
+        </div>
+        <div class="footer-meta">
+          <a href="sample-report.html">Sample report</a>
+          <a href="read-only.html">What it does to your cluster</a>
+          <a href="index.html#download">Download</a>
+        </div>
+      </div>
+      <div class="footer-bottom"><span>Source-available · Apache-2.0 core</span><span>·</span><span>No agent · no SaaS · your data stays on your machine</span></div>
+    </div>
+  </footer>
+
+</main>
+</body>
+</html>
