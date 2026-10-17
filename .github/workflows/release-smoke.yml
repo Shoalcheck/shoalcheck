@@ -35,13 +35,13 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       TAG_INPUT: ${{ inputs.tag || github.event.release.tag_name }}
-      SHOALCHECK_HOME: ${{ runner.temp }}/home
       BIN: ${{ matrix.goos == 'windows' && '.exe' || '' }}
     steps:
       - name: Which release
         run: |
           tag="$TAG_INPUT"
           [ -n "$tag" ] || tag=$(gh release list -R "$GITHUB_REPOSITORY" --limit 1 --exclude-drafts --json tagName --jq '.[0].tagName')
+          echo "SHOALCHECK_HOME=$RUNNER_TEMP/home" >> "$GITHUB_ENV"
           echo "TAG=$tag" >> "$GITHUB_ENV"
           echo "VER=${tag#v}" >> "$GITHUB_ENV"
           echo "verifying $tag on ${{ matrix.goos }}/${{ matrix.goarch }} ($RUNNER_OS $RUNNER_ARCH)"
