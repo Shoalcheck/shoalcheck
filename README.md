@@ -4,7 +4,7 @@ Shoalcheck reads a Kubernetes cluster read-only from your machine and tells you 
 a node that cannot be drained, workloads with nowhere to go if a zone fails, what blocks the next upgrade — and
 writes one signed report in which every figure carries what it rests on.
 
-This repository holds **releases only**. Download the archive for your platform from
+This repository holds **releases only**; the landing page is [shoalcheck.github.io](https://shoalcheck.github.io). Download the archive for your platform from
 [the latest release](../../releases/latest):
 
 | | Command line | Desktop app |
@@ -14,7 +14,7 @@ This repository holds **releases only**. Download the archive for your platform 
 | Linux | `shoalcheck_<v>_linux_<arch>.tar.gz` | `shoalcheck-app_<v>_linux_<arch>.tar.gz` |
 
 Also: `kubectl-shoalcheck_<v>_<os>_<arch>` (a kubectl plugin) and `shoalcheck-mcp_<v>_<os>_<arch>` (an MCP
-server for an assistant). Homebrew, from the first stable release: `brew install ilya776/tap/shoalcheck`.
+server for an assistant). Homebrew, from the first stable release: `brew install shoalcheck/tap/shoalcheck`.
 
 ```
 shoalcheck audit --show-permissions        # exactly what access it needs, before it connects
