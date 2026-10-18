@@ -108,7 +108,18 @@ jobs:
           for i in $(seq 1 60); do curl -fs http://127.0.0.1:47812/ -o index.html && break; sleep 0.5; done
           cat app.out
           grep -q '<title>Shoalcheck</title>' index.html
-          curl -fs http://127.0.0.1:47812/api/license | tee license.json
+          # From 0.1.0-rc.3 the window's server answers /api/ only with the per-launch session token its own
+          # page carries, so a page on another site cannot drive it. Read the token as the page does; a
+          # release that serves none (rc.2) is asked without it, and one that serves it must refuse a
+          # request that does not carry it.
+          tok=$(sed -n 's/.*<meta name="shoalcheck-session" content="\([0-9a-f]*\)".*/\1/p' index.html | head -n 1)
+          if [ -n "$tok" ]; then
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:47812/api/license)
+            echo "without the session token: HTTP $code"; [ "$code" = 403 ]
+            curl -fs -H "X-Shoalcheck-Session: $tok" http://127.0.0.1:47812/api/license | tee license.json
+          else
+            curl -fs http://127.0.0.1:47812/api/license | tee license.json
+          fi
           grep -q '"unlicensed":true' license.json
 
       - name: The macOS app from the disk image starts and reads the licence
@@ -123,7 +134,18 @@ jobs:
           for i in $(seq 1 60); do curl -fs http://127.0.0.1:47812/ -o index.html && break; sleep 0.5; done
           cat app.out
           grep -q '<title>Shoalcheck</title>' index.html
-          curl -fs http://127.0.0.1:47812/api/license | tee license.json
+          # From 0.1.0-rc.3 the window's server answers /api/ only with the per-launch session token its own
+          # page carries, so a page on another site cannot drive it. Read the token as the page does; a
+          # release that serves none (rc.2) is asked without it, and one that serves it must refuse a
+          # request that does not carry it.
+          tok=$(sed -n 's/.*<meta name="shoalcheck-session" content="\([0-9a-f]*\)".*/\1/p' index.html | head -n 1)
+          if [ -n "$tok" ]; then
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:47812/api/license)
+            echo "without the session token: HTTP $code"; [ "$code" = 403 ]
+            curl -fs -H "X-Shoalcheck-Session: $tok" http://127.0.0.1:47812/api/license | tee license.json
+          else
+            curl -fs http://127.0.0.1:47812/api/license | tee license.json
+          fi
           grep -q '"unlicensed":true' license.json
 
       - name: A kind cluster config
