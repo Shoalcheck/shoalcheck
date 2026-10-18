@@ -1,8 +1,8 @@
 # Shoalcheck — releases
 
 Shoalcheck reads a Kubernetes cluster read-only from your machine and tells you what stops the next change —
-a node that cannot be drained, workloads with nowhere to go if a zone fails, what blocks the next upgrade — and
-writes one signed report in which every figure carries what it rests on.
+a node that cannot be drained, workloads with nowhere to go if a zone fails, what blocks the next upgrade. With a
+licence, a reading is a report in which every figure carries what it rests on.
 
 This repository holds **releases only**; the landing page is [shoalcheck.github.io](https://shoalcheck.github.io). Download the archive for your platform from
 [the latest release](../../releases/latest):
@@ -19,8 +19,8 @@ server for an assistant). Homebrew, from the first stable release: `brew install
 ```
 shoalcheck audit --show-permissions        # exactly what access it needs, before it connects
 shoalcheck preflight drain node-1          # exit 0 nothing stops it · 2 something does · 1 partial
-shoalcheck audit --context prod            # the opening and the top five problems, free
-shoalcheck licence plans                   # what a licence adds
+shoalcheck audit --context prod            # the size of the reading and its five most serious kinds, free
+shoalcheck licence plans                   # what a licence adds; keys are not on sale yet
 ```
 
 **Verify what you downloaded.** Every release publishes `checksums.txt` and its signature bundle
@@ -32,5 +32,10 @@ cosign verify-blob --key cosign.pub --bundle checksums.txt.sigstore.json checksu
 shasum -a 256 --ignore-missing -c checksums.txt
 ```
 
-The first releases are not notarized by Apple or code-signed for Windows yet: on macOS Control-click the app
-and choose Open the first time; on Windows, SmartScreen asks once (More info → Run anyway).
+The first releases are not notarized by Apple or code-signed for Windows yet. On macOS, when the app is stopped the
+first time, open System Settings → Privacy & Security and choose Open Anyway, or remove the quarantine flag
+yourself: `xattr -dr com.apple.quarantine /Applications/Shoalcheck.app`. On Windows, SmartScreen asks once
+(More info → Run anyway).
+
+There is no support desk. `shoalcheck support`, or Settings → Diagnostics in the app, writes a file that describes
+an install and a reading without naming anything in the cluster.
