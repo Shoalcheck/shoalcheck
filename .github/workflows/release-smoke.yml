@@ -55,6 +55,7 @@ jobs:
             -p checksums.txt -p checksums.txt.sigstore.json -p cosign.pub \
             -p "shoalcheck_${VER}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.ext }}" \
             -p "shoalcheck-mcp_${VER}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.ext }}" \
+            -p "kubectl-shoalcheck_${VER}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.ext }}" \
             -p "$app"
           ls -la
           echo "APP_FILE=$app" >> "$GITHUB_ENV"
@@ -66,18 +67,16 @@ jobs:
           else shasum -a 256 --ignore-missing -c checksums.txt; fi
 
       - name: Install cosign
-        if: matrix.goos != 'windows'
         uses: sigstore/cosign-installer@v3
 
       - name: The checksums carry the published signature
-        if: matrix.goos != 'windows'
         working-directory: dl
         run: cosign verify-blob --key cosign.pub --bundle checksums.txt.sigstore.json checksums.txt
 
       - name: Unpack
         working-directory: dl
         run: |
-          for f in shoalcheck_*.${{ matrix.ext }} shoalcheck-mcp_*.${{ matrix.ext }}; do
+          for f in shoalcheck_*.${{ matrix.ext }} shoalcheck-mcp_*.${{ matrix.ext }} kubectl-shoalcheck_*.${{ matrix.ext }}; do
             if [ "${{ matrix.ext }}" = zip ]; then pwsh -NoProfile -Command "Expand-Archive -Force '$f' ."; else tar xzf "$f"; fi
           done
           if [ "${{ matrix.goos }}" != darwin ]; then
@@ -99,6 +98,9 @@ jobs:
           cat fleet.err; [ "$code" = 4 ] && grep -q Team fleet.err
           set +e; ./shoalcheck-mcp$BIN --print-identity 2> mcp.err; code=$?; set -e
           cat mcp.err; [ "$code" = 4 ]
+          # The kubectl plugin is the same binary under kubectl's naming; the archive is published, so it is run.
+          ./kubectl-shoalcheck$BIN version | tee plugin-version.txt
+          grep -q "$VER" plugin-version.txt
 
       - name: The window's server starts and reads the licence (Windows, Linux)
         if: matrix.goos != 'darwin'
@@ -178,3 +180,7 @@ jobs:
           cat free.txt; grep -q 'the free reading' free.txt
           set +e; ./shoalcheck audit --context kind-smoke --output r.html > /dev/null 2> out.err; code=$?; set -e
           cat out.err; [ "$code" = 4 ] && [ ! -e r.html ]
+          # kubectl finds the plugin by its name on PATH, and it answers the same drain the same way.
+          export PATH="$PWD:$PATH"
+          set +e; kubectl shoalcheck preflight drain smoke-worker --context kind-smoke > plugin-drain.txt 2>&1; code=$?; set -e
+          cat plugin-drain.txt; [ "$code" = 2 ] && grep -q 'cannot be evacuated' plugin-drain.txt
