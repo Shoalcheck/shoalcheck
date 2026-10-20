@@ -1,8 +1,10 @@
 name: release-smoke
 
 # EVERY PUBLISHED FILE, ON EVERY PLATFORM IT CLAIMS. The landing page offers downloads for six platform pairs;
-# this runs the published archives — not a fresh build — on each of them, and on Linux against a real kind
-# cluster. A platform with no green run here is a platform nobody has seen work.
+# this runs the published archives — not a fresh build — on each of them: on Linux against a real kind cluster,
+# and on macOS and Windows, where no kind cluster can run, against that cluster's recorded answers
+# (.github/smoke/apiserver.py), so every platform makes a real reading. A platform with no green run here is a
+# platform nobody has seen work.
 on:
   workflow_dispatch:
     inputs:
@@ -37,6 +39,11 @@ jobs:
       TAG_INPUT: ${{ inputs.tag || github.event.release.tag_name }}
       BIN: ${{ matrix.goos == 'windows' && '.exe' || '' }}
     steps:
+      - name: The smoke's own files (the recorded cluster, the fixture)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/smoke
+
       - name: Which release
         run: |
           tag="$TAG_INPUT"
@@ -167,13 +174,7 @@ jobs:
         if: matrix.cluster
         working-directory: dl
         run: |
-          kubectl create namespace payments
-          kubectl -n payments create deployment ledger-api --image=registry.k8s.io/pause:3.9 --replicas=2
-          kubectl -n payments patch deployment ledger-api --type merge -p '{"spec":{"template":{"spec":{"nodeSelector":{"kubernetes.io/hostname":"smoke-worker"}}}}}'
-          kubectl -n payments create pdb ledger-api --selector=app=ledger-api --max-unavailable=0
-          kubectl -n payments rollout status deployment/ledger-api --timeout=180s
-          # The budget's status is written by a controller a moment later; the drain verdict reads it.
-          kubectl -n payments wait pdb/ledger-api --for=jsonpath='{.status.expectedPods}'=2 --timeout=120s
+          bash ../.github/smoke/fixture.sh
           set +e; ./shoalcheck preflight drain smoke-worker --context kind-smoke > drain.txt 2>&1; code=$?; set -e
           cat drain.txt; [ "$code" = 2 ] && grep -q 'cannot be evacuated' drain.txt
           ./shoalcheck audit --context kind-smoke > free.txt 2>/dev/null
@@ -184,3 +185,41 @@ jobs:
           export PATH="$PWD:$PATH"
           set +e; kubectl shoalcheck preflight drain smoke-worker --context kind-smoke > plugin-drain.txt 2>&1; code=$?; set -e
           cat plugin-drain.txt; [ "$code" = 2 ] && grep -q 'cannot be evacuated' plugin-drain.txt
+
+      - name: Python for the recorded cluster
+        if: ${{ !matrix.cluster }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Preflight and the free audit against the recorded cluster (macOS, Windows)
+        if: ${{ !matrix.cluster }}
+        working-directory: dl
+        run: |
+          python ../.github/smoke/apiserver.py replay ../.github/smoke/recording.json > replay.log 2>&1 &
+          for i in $(seq 1 60); do curl -fs http://127.0.0.1:18080/version > /dev/null && break; sleep 0.5; done
+          cat replay.log
+          cp ../.github/smoke/kubeconfig.yaml kubeconfig.yaml
+          if command -v cygpath > /dev/null; then export KUBECONFIG="$(cygpath -w "$PWD/kubeconfig.yaml")"
+          else export KUBECONFIG="$PWD/kubeconfig.yaml"; fi
+          set +e; ./shoalcheck$BIN preflight drain smoke-worker --context kind-smoke > drain.txt 2>&1; code=$?; set -e
+          cat drain.txt; [ "$code" = 2 ] && grep -q 'cannot be evacuated' drain.txt
+          ./shoalcheck$BIN audit --context kind-smoke > free.txt 2>/dev/null
+          cat free.txt; grep -q 'the free reading' free.txt
+          set +e; ./shoalcheck$BIN audit --context kind-smoke --output r.html > /dev/null 2> out.err; code=$?; set -e
+          cat out.err; [ "$code" = 4 ] && [ ! -e r.html ]
+          if command -v kubectl > /dev/null; then
+            export PATH="$PWD:$PATH"
+            set +e; kubectl shoalcheck preflight drain smoke-worker --context kind-smoke > plugin-drain.txt 2>&1; code=$?; set -e
+            cat plugin-drain.txt; [ "$code" = 2 ] && grep -q 'cannot be evacuated' plugin-drain.txt
+          else
+            echo "no kubectl on this runner: the plugin answered its version above, and kubectl's lookup is not exercised here"
+          fi
+          # A request the recording holds no answer for is a reading this platform did not fully make; a write is
+          # listed here too, and the product makes none.
+          curl -fs http://127.0.0.1:18080/__misses > misses.txt
+          if [ -s misses.txt ]; then
+            cat misses.txt
+            echo "::error::the binary asked for answers the recording does not hold — re-record: .github/smoke/record.sh ./shoalcheck"
+            exit 1
+          fi
