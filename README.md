@@ -32,6 +32,9 @@ cosign verify-blob --key cosign.pub --bundle checksums.txt.sigstore.json checksu
 shasum -a 256 --ignore-missing -c checksums.txt
 ```
 
+cosign publishes no Windows arm64 build; on Windows on Arm its x64 build (`cosign-windows-amd64.exe`) runs under
+the system's emulation, and that is what release-smoke checks there.
+
 The first releases are not notarized by Apple or code-signed for Windows yet. On macOS, when the app is stopped the
 first time, open System Settings → Privacy & Security and choose Open Anyway, or remove the quarantine flag
 yourself: `xattr -dr com.apple.quarantine /Applications/Shoalcheck.app`. On Windows, SmartScreen asks once

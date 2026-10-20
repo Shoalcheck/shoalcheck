@@ -74,7 +74,29 @@ jobs:
           else shasum -a 256 --ignore-missing -c checksums.txt; fi
 
       - name: Install cosign
+        if: ${{ !(matrix.goos == 'windows' && matrix.goarch == 'arm64') }}
         uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: v2.5.2
+
+      # cosign publishes no Windows arm64 build and the installer refuses that runner, so Windows on Arm runs the
+      # x64 build under the system's emulation, as a user there would: the same release the other five install,
+      # checked against the sha256 in that release's cosign_checksums.txt.
+      - name: Install cosign (Windows on Arm, the x64 build)
+        if: ${{ matrix.goos == 'windows' && matrix.goarch == 'arm64' }}
+        shell: pwsh
+        env:
+          COSIGN_URL: https://github.com/sigstore/cosign/releases/download/v2.5.2/cosign-windows-amd64.exe
+          COSIGN_SHA256: fef1c4731da9112d4cf2f6d93ae2a1551c73116a4f73fab7b0c15b38e95ff688
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP cosign
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          $exe = Join-Path $dir cosign.exe
+          Invoke-WebRequest -Uri $env:COSIGN_URL -OutFile $exe
+          $got = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          if ($got -ne $env:COSIGN_SHA256) { throw "cosign.exe is $got, the release says $env:COSIGN_SHA256" }
+          & $exe version
+          $dir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: The checksums carry the published signature
         working-directory: dl
