@@ -59,7 +59,7 @@ jobs:
           app="shoalcheck-app_${VER}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.ext }}"
           [ "${{ matrix.goos }}" = darwin ] && app="Shoalcheck_${VER}_macos_universal.dmg"
           gh release download "$TAG" -R "$GITHUB_REPOSITORY" \
-            -p checksums.txt -p checksums.txt.sigstore.json -p cosign.pub \
+            -p checksums.txt -p checksums.txt.sigstore.json \
             -p "shoalcheck_${VER}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.ext }}" \
             -p "shoalcheck-mcp_${VER}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.ext }}" \
             -p "kubectl-shoalcheck_${VER}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.ext }}" \
@@ -100,7 +100,9 @@ jobs:
 
       - name: The checksums carry the published signature
         working-directory: dl
-        run: cosign verify-blob --key cosign.pub --bundle checksums.txt.sigstore.json checksums.txt
+        # The key from this repository's own cosign.pub (checked out with the smoke's files — a root file is always in
+        # a cone-mode checkout), never the release's copy: a key downloaded from the release it vouches for proves nothing.
+        run: cosign verify-blob --key ../cosign.pub --bundle checksums.txt.sigstore.json checksums.txt
 
       - name: Unpack
         working-directory: dl
