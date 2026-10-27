@@ -1,5 +1,11 @@
 name: release-smoke
 
+# THE COPY IN THE SOURCE REPOSITORY (docs/launch/public/release-smoke.yml) IS THE ONE TO EDIT. Apply it to
+# Shoalcheck/shoalcheck as .github/workflows/release-smoke.yml, with docs/launch/public/smoke/installer-smoke.ps1 as
+# .github/smoke/installer-smoke.ps1. From 0.1.0-rc.13 it also installs the Windows installer silently on both
+# Windows runners, runs what it installed, installs again over a running copy, and uninstalls; a release from before
+# rc.13 has no installer and says so.
+
 # EVERY PUBLISHED FILE, ON EVERY PLATFORM IT CLAIMS. The landing page offers downloads for six platform pairs;
 # this runs the published archives — not a fresh build — on each of them: on Linux against a real kind cluster,
 # and on macOS and Windows, where no kind cluster can run, against that cluster's recorded answers
@@ -64,6 +70,16 @@ jobs:
             -p "shoalcheck-mcp_${VER}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.ext }}" \
             -p "kubectl-shoalcheck_${VER}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.ext }}" \
             -p "$app"
+          # The Windows installer, from 0.1.0-rc.13. Downloaded here so the checksum step below checks it too.
+          if [ "${{ matrix.goos }}" = windows ]; then
+            setup="Shoalcheck_${VER}_windows_${{ matrix.goarch }}_setup.exe"
+            if gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx "$setup"; then
+              gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p "$setup"
+              echo "SETUP_FILE=$setup" >> "$GITHUB_ENV"
+            else
+              echo "$TAG has no Windows installer (they start with 0.1.0-rc.13)"
+            fi
+          fi
           ls -la
           echo "APP_FILE=$app" >> "$GITHUB_ENV"
 
@@ -154,6 +170,15 @@ jobs:
             curl -fs http://127.0.0.1:47812/api/license | tee license.json
           fi
           grep -q '"unlicensed":true' license.json
+
+      # Install silently (/S), check the files, the Start menu, PATH and Apps & features, run the installed
+      # shoalcheck --version and the installed window's server, install again over that running copy (it must be
+      # put aside, not killed), then uninstall silently and check PATH is exactly what it was.
+      - name: The Windows installer installs, upgrades over a running copy, and uninstalls
+        if: matrix.goos == 'windows' && env.SETUP_FILE != ''
+        working-directory: dl
+        shell: pwsh
+        run: ../.github/smoke/installer-smoke.ps1 -Setup (Resolve-Path $env:SETUP_FILE).Path -Version $env:VER
 
       - name: The macOS app from the disk image starts and reads the licence
         if: matrix.dmg

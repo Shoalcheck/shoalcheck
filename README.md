@@ -1,6 +1,6 @@
 # Shoalcheck — releases
 
-Newest release: [v0.1.0-rc.12](../../releases/tag/v0.1.0-rc.12), 2026-10-21.
+Newest release: [v0.1.0](../../releases/tag/v0.1.0), 2026-10-27.
 
 Shoalcheck reads a Kubernetes cluster read-only from your machine and tells you what stops the next change —
 a node that cannot be drained, workloads with nowhere to go if a zone fails, what blocks the next upgrade. With a
@@ -14,17 +14,23 @@ there is a newer one:
 | | Command line | Desktop app |
 |---|---|---|
 | macOS | `shoalcheck_<v>_darwin_<arch>.tar.gz` | `Shoalcheck_<v>_macos_universal.dmg` |
-| Windows | `shoalcheck_<v>_windows_<arch>.zip` | `shoalcheck-app_<v>_windows_<arch>.zip` |
+| Windows | `shoalcheck_<v>_windows_<arch>.zip` | `Shoalcheck_<v>_windows_<arch>_setup.exe`, or `shoalcheck-app_<v>_windows_<arch>.zip` |
 | Linux | `shoalcheck_<v>_linux_<arch>.tar.gz` | `shoalcheck-app_<v>_linux_<arch>.tar.gz` |
 
+The Windows installer is per user (no administrator): the app, `shoalcheck` and `kubectl-shoalcheck`, a Start menu
+entry, the command line on your PATH, and an entry in Apps & features; `/S` installs silently. On Windows the app is
+a native window (WebView2); on Linux it is an app window of Chrome, Chromium, Brave or Edge if one is installed, and
+`install-desktop-entry.sh` in its archive adds it to the application menu. Without either, it opens in your browser
+and says so.
+
 Also: `kubectl-shoalcheck_<v>_<os>_<arch>` (a kubectl plugin) and `shoalcheck-mcp_<v>_<os>_<arch>` (an MCP
-server for an assistant). Homebrew, from the first stable release: `brew install shoalcheck/tap/shoalcheck`.
+server for an assistant). Homebrew (macOS and Linux, the command line): `brew install shoalcheck/tap/shoalcheck`.
 
 ```
 shoalcheck audit --show-permissions        # exactly what access it needs, before it connects
 shoalcheck preflight drain node-1          # exit 0 nothing stops it · 2 something does · 1 partial
 shoalcheck audit --context prod            # the size of the reading and its five most serious kinds, free
-shoalcheck licence plans                   # what a licence adds, and where to buy one
+shoalcheck licence plans                   # what a licence adds; keys are sold at https://shop.shoalcheck.com/buy
 ```
 
 **Verify what you downloaded.** Every release publishes `checksums.txt` and its signature bundle
