@@ -83,5 +83,9 @@ if (Test-Path $startMenu) { Fail 'the Start menu shortcut survived the uninstall
 if (Test-Path $uninstKey) { Fail 'Apps & features still lists Shoalcheck' }
 if (OnPath) { Fail "the uninstall left $dir on PATH: $(UserPath)" }
 if ((UserPath) -ne $before) { Fail "the uninstall did not give PATH back as it was:`n before: $before`n after:  $(UserPath)" }
-Remove-Item -Force (Join-Path $dir 'uninstall.exe')
+# The uninstaller's own process can hold its file for a moment after it exits (seen on windows/arm64), so the
+# clean-up retries; every check above has already passed.
+$un = Join-Path $dir 'uninstall.exe'
+for ($i = 0; (Test-Path $un) -and $i -lt 20; $i++) { Remove-Item -Force $un -ErrorAction SilentlyContinue; if (Test-Path $un) { Start-Sleep -Milliseconds 500 } }
+if (Test-Path $un) { Fail "$un could not be removed after the uninstall" }
 Write-Host 'uninstalled: files, shortcut, Apps & features entry and PATH entry gone; PATH as it was before'
