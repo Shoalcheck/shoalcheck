@@ -1,6 +1,6 @@
 # Shoalcheck — releases
 
-Newest release: [v0.1.4](../../releases/tag/v0.1.4), 2026-10-29.
+Newest release: [v0.1.5](../../releases/tag/v0.1.5), 2026-10-29.
 
 Shoalcheck reads a Kubernetes cluster read-only from your machine and tells you what stops the next change —
 a node that cannot be drained, workloads with nowhere to go if a zone fails, what blocks the next upgrade. With a
