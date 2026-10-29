@@ -6,10 +6,12 @@ Shoalcheck reads a Kubernetes cluster read-only from your machine and tells you 
 a node that cannot be drained, workloads with nowhere to go if a zone fails, what blocks the next upgrade. With a
 licence, a reading is a report in which every figure carries what it rests on.
 
+See it work: [a 74-second walkthrough](https://youtu.be/eyYNvSTE65E), filmed on the real product — the app, a
+Jira ticket, a pull request gated in CI and Claude Code over MCP.
+
 This repository holds **releases only**; the landing page is [shoalcheck.com](https://shoalcheck.com). Download the archive for your platform from
-the newest release on [the releases page](../../releases) — every release is still a prerelease, so GitHub has no
-"latest" to link to; `shoalcheck version` names the one you have and `shoalcheck upgrade --check` says whether
-there is a newer one:
+[the latest release](../../releases/latest); `shoalcheck version` names the one you have and
+`shoalcheck upgrade --check` says whether there is a newer one:
 
 | | Command line | Desktop app |
 |---|---|---|
