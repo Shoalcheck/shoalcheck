@@ -2,9 +2,9 @@ name: release-smoke
 
 # THE COPY IN THE SOURCE REPOSITORY (docs/launch/public/release-smoke.yml) IS THE ONE TO EDIT. Apply it to
 # Shoalcheck/shoalcheck as .github/workflows/release-smoke.yml, with docs/launch/public/smoke/installer-smoke.ps1 as
-# .github/smoke/installer-smoke.ps1. From 0.1.0-rc.13 it also installs the Windows installer silently on both
+# .github/smoke/installer-smoke.ps1. From 0.1.0 it also installs the Windows installer silently on both
 # Windows runners, runs what it installed, installs again over a running copy, and uninstalls; a release from before
-# rc.13 has no installer and says so.
+# 0.1.0 has no installer and says so.
 
 # EVERY PUBLISHED FILE, ON EVERY PLATFORM IT CLAIMS. The landing page offers downloads for six platform pairs;
 # this runs the published archives — not a fresh build — on each of them: on Linux against a real kind cluster,
@@ -46,7 +46,7 @@ jobs:
       BIN: ${{ matrix.goos == 'windows' && '.exe' || '' }}
     steps:
       - name: The smoke's own files (the recorded cluster, the fixture)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           sparse-checkout: .github/smoke
 
@@ -70,14 +70,14 @@ jobs:
             -p "shoalcheck-mcp_${VER}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.ext }}" \
             -p "kubectl-shoalcheck_${VER}_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.ext }}" \
             -p "$app"
-          # The Windows installer, from 0.1.0-rc.13. Downloaded here so the checksum step below checks it too.
+          # The Windows installer, from 0.1.0. Downloaded here so the checksum step below checks it too.
           if [ "${{ matrix.goos }}" = windows ]; then
             setup="Shoalcheck_${VER}_windows_${{ matrix.goarch }}_setup.exe"
             if gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx "$setup"; then
               gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p "$setup"
               echo "SETUP_FILE=$setup" >> "$GITHUB_ENV"
             else
-              echo "$TAG has no Windows installer (they start with 0.1.0-rc.13)"
+              echo "$TAG has no Windows installer (they start with 0.1.0)"
             fi
           fi
           ls -la
@@ -91,7 +91,7 @@ jobs:
 
       - name: Install cosign
         if: ${{ !(matrix.goos == 'windows' && matrix.goarch == 'arm64') }}
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
         with:
           cosign-release: v2.5.2
 
@@ -214,7 +214,7 @@ jobs:
 
       - name: A kind cluster to read
         if: matrix.cluster
-        uses: helm/kind-action@v1
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
         with:
           cluster_name: smoke
           config: ${{ runner.temp }}/kind.yaml
@@ -237,7 +237,7 @@ jobs:
 
       - name: Python for the recorded cluster
         if: ${{ !matrix.cluster }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
 
